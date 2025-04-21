@@ -1,6 +1,6 @@
 {
     "nickname": "POTATO_Chater",
-    "private_key": "key.pem",
+    "private_key": "",
     "sam_address": [
         "127.0.0.1",
         7656
