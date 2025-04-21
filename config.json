@@ -1,7 +1,10 @@
 {
-    "nickname": "SCH_mobile",
-    "key_file": "",
-    "sam_address": ["127.0.0.1", 7656],
-    "rooms": [],
-    "friends": []
+    "nickname": "POTATO_Chater",
+    "private_key": "key.pem",
+    "sam_address": [
+        "127.0.0.1",
+        7656
+    ],
+    "friends": [],
+    "rooms": []
 }

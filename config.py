@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import json
 
 @dataclass
@@ -28,8 +28,13 @@ def load_config_from_json() -> ChatUserConfig:
     rooms = [Room(**r) for r in data["rooms"]]
 
     return ChatUserConfig(nickname=data["nickname"],
-                            private_key=data["key_file"],
+                            private_key=data["private_key"],
                             sam_address=(data["sam_address"][0], data["sam_address"][1]),
                             friends=friends,
                             rooms=rooms
                             )
+
+def update_config(config: ChatUserConfig):
+    with open('config.json', 'w', encoding='utf-8') as f:
+        json.dump(asdict(config), f, ensure_ascii=False, indent=4)
+    

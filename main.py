@@ -1,48 +1,49 @@
 #!/usr/bin/env python3
 
-
-from asyncio import StreamReader, StreamWriter
 import asyncio
-import sys
+import logging
+import os
 
 from ChatUser import ChatUser, ChatMessage, ChatEvent
-from config import Friend, ChatUserConfig, Room, load_config_from_json
+from config import Friend, ChatUserConfig, Room, load_config_from_json, update_config
 
-reader: StreamReader = None
-writer: StreamWriter = None
 active_room = ""
+chat_user: ChatUser = None
 
 async def sys_msg(*args):
     msg = "potato: "
     for i in args:
         msg+=i+" "
     msg+='\n'
-    writer.write(msg.encode())
-    await writer.drain()
+    print(msg, end="")
 
 async def handle_msg(cm: ChatMessage):
     msg = f"{cm.nickname}@{cm.room}: {cm.message}\n>" 
-    writer.write(msg.encode())
-    await writer.drain()
-    pass
+    print(msg, end="")
+    
 
 async def handle_add_friend(f: Friend):
-    await sys_msg(f"Добавлен ШизоДруг: {f.nickname}@{f.destination}\n>")
-    pass
+    await sys_msg(f"Добавлен ШизоДруг: {f.nickname}@{f.destination}")
+    print(">", end="")
+    
 
 async def handle_create_room(r: Room):
-    await sys_msg(f"Новая палату ура-ура бЮдЖжет освоен как надо: {r.name}\nпациенты: {r.friends}\n>")
-    pass
+    await sys_msg(f"Новая палату ура-ура бЮдЖжет освоен как надо: {r.name}\nпациенты: {r.friends}")
+    print(">", end="")
+    
 
 async def cmd_help():
     msg = """
+ID: {id}
 /help - чмырят офлайн
 /add_friend {dest} - добавляет шиза
 /friends - список шизов
 /create_room {name} {f1} {f2} {fn} - создает палату 
 /rooms - список палат
 /set_room {name} - переводят в палату
+/save - сохраняет кал
 """
+    msg = msg.replace("{id}", chat_user.node.destination.base32)
     await sys_msg(msg)
 
 async def cmd_add_friend(chat_user: ChatUser, dest: str):
@@ -73,13 +74,14 @@ async def cmd_set_room(name: str):
     active_room = name
     await sys_msg(f"ты в палате: {name}\n>")
 
+async def ainput(prompt: str = ""):
+    return await asyncio.to_thread(input, prompt)
+
 async def input_loop(chat_user: ChatUser):
     while True:
-        writer.write(">".encode())
-        await writer.drain()
+        print(">", end="")
 
-        msg = await reader.readline() 
-        msg = msg.decode()[:-1]
+        msg = await ainput("")
 
         if msg == "": continue
         if msg[0] == '/':
@@ -96,6 +98,9 @@ async def input_loop(chat_user: ChatUser):
                 await cmd_rooms(chat_user)
             elif cmd[0] == "/set_room":
                 await cmd_set_room(cmd[1])
+            elif cmd[0] == "/save":
+                update_config(chat_user.config)
+
         elif active_room != "":
             await chat_user.send(active_room, msg)
             
@@ -117,23 +122,25 @@ def draw_logo():
  |___|~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|___| 
 (_____)                                                                 (_____)""")
 
-async def main(loop: asyncio.AbstractEventLoop):
-    global reader
-    global writer
 
-#####################################################################################################
-    reader = asyncio.StreamReader(loop=loop)
-    protocol = asyncio.streams.FlowControlMixin(loop=loop)
-    transport, _ = await loop.connect_write_pipe(lambda: protocol, sys.stdout)
-    writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-    r_protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: r_protocol, sys.stdin)
-#####################################################################################################
+def check_config(cu: ChatUser):
+    if cu.config.private_key != "": return
+
+    with open("key.pem", "+wb") as fd:
+        fd.write(cu.node.destination.private_key.data) 
+    cu.config.private_key = "key.pem"
+    update_config(cu.config)
+
+async def main(loop: asyncio.AbstractEventLoop):
+    global chat_user
 
     draw_logo()
     await sys_msg("Кидаю удава в i2p (где интернеты?)...")
     chat_user = ChatUser(load_config_from_json(), loop)
     await chat_user.start()
+
+
+    check_config(chat_user)
     await sys_msg(f"о ты в потоке XXX\n"+"="*64+
                   f"\nID: {chat_user.node.destination.base32}\nnickname: {chat_user.config.nickname}\nВсе удав в деле\n"+
                   "="*64)
@@ -146,13 +153,14 @@ async def main(loop: asyncio.AbstractEventLoop):
 
     asyncio.ensure_future(input_loop(chat_user), loop=loop)
 
-import logging
-import random
 
-if __name__ == "__main__":
-    # loop = asyncio.get_event_loop()
-    logging.basicConfig(level=logging.DEBUG, filename=f"./logs_{random.randint(0,99999999)}.log")
-    # logging.basicConfig(level=logging.DEBUG)
+if __name__ == "__main__":    
+    if not os.path.exists("./logs"):
+        os.makedirs("./logs")
+
+    log_id = len(os.listdir("./logs"))    
+
+    logging.basicConfig(level=logging.DEBUG, filename=f"./logs/logs_{log_id}.log")
     loop = asyncio.get_event_loop()
     loop.set_debug(True)
 
@@ -163,5 +171,6 @@ if __name__ == "__main__":
 
         loop.stop()
         loop.close()
+        update_config(chat_user.config)
 
     print("HELL...")
